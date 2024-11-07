@@ -30,7 +30,7 @@ library(patchwork)
 ggplot(survival) + 
   geom_point(aes(x = Treatment, y = Proportion, color = as.factor(Rep), shape = as.factor(Exp))) +scale_x_continuous(breaks = c(1,6,9,10,11)) 
 
-#change
+
 survival$Female <- as.factor(survival$Female)
 survival$Rep <- as.factor(survival$Rep)
 survival$Exp <- as.factor(survival$Exp)
@@ -235,9 +235,9 @@ ggplot(survival) +
   xlab(label = "Temperature (°C)")+
   ylab("Proportion of Survivors") + theme_classic() + scale_color_manual(values = c("#0072B2", "#D95F02", "#999999"), name= "Trial Date") + theme(text = element_text(size = 20)) +
   annotate("text", x = c(1,2,3,4,5), y = c(1.03, 1.03, 1.03, 0.8, 0.45), label = c("a", "a", "ab", "bc", "c"))
-ggsave("~/Desktop/Opihi_Larvae/opihi_exp1.2.png")
+ggsave("~/Desktop/Opihi_Rearing/Output/opihi_exp1.2.png")
 data_plot + mod_plot
-ggsave("~/Desktop/Opihi_Larvae/opihi_exp1.1.png")
+ggsave("~/Desktop/Opihi_Rearing/Output/opihi_exp1.1.png")
 
 
 ```
