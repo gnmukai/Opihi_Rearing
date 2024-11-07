@@ -30,7 +30,7 @@ library(patchwork)
 ggplot(survival) + 
   geom_point(aes(x = Treatment, y = Proportion, color = as.factor(Rep), shape = as.factor(Exp))) +scale_x_continuous(breaks = c(1,6,9,10,11)) 
 
-
+#change
 survival$Female <- as.factor(survival$Female)
 survival$Rep <- as.factor(survival$Rep)
 survival$Exp <- as.factor(survival$Exp)
