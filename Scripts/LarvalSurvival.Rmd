@@ -50,6 +50,7 @@ class(survival$Temperature)
 class(survival$Rep)
 survival$Rep <- as.factor(survival$Rep)
 survival$Exp <- as.factor(survival$Exp)
+survival$Temperature <- as.factor(survival$Temperature)
 survival$Original_Starting <- as.integer(survival$Original_Starting)
 survival$Number <- as.integer(survival$Number)
 
