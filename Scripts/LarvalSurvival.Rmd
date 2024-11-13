@@ -137,10 +137,14 @@ library(glmmTMB)
 
 #repnested = (glmmTMB( cbind(Number,Previous_Starting-Number) ~ (1 | Female/Rep) + Days_in_TB + Temperature+ I(Temperature^2), family = betabinomial, data = survival )) # dropped alk as random effect bc variance were very small and messing up code
 survival$Temperature = as.factor(survival$Temperature)
-repnested = (glmmTMB( cbind(Number,Previous_Starting-Number) ~ (1 | Female/Rep) + Days_in_TB*Temperature, family = betabinomial, data = survival ))
+repnested_og = (glmmTMB( cbind(Number,Previous_Starting-Number) ~ (1 | Female/Rep) + Days_in_TB*Temperature, family = betabinomial, data = survival ))
+summary(repnested_og)
+survival$time2 <- survival$Days_in_TB^2
+repnested = glmmTMB( cbind(Number,Previous_Starting-Number) ~ (1 | Female/Rep) + Days_in_TB*Temperature + I(Days_in_TB^2)*Temperature, family = betabinomial, data = survival)
+# alt make new variable with time*time 
 
-repnested = glmmTMB( cbind(Number,Previous_Starting-Number) ~ (1 | Female/Rep) + poly(Days_in_TB, 2)*Temperature, family = betabinomial, data = survival)
 
+summary(repnested)
 cum_repnested = (glmmTMB( cbind(Number,Original_Starting-Number) ~ (1 | Female/Rep) + Days_in_TB*Temperature, family = betabinomial, data = survival ))
 # use temp as factor since effect of temp is not cont. (big drop off at 32.5)
 AIC(repnested)
@@ -152,12 +156,17 @@ summary(repnested)
 How do we do model diagnostics for binomial model? 
 
 ```{r}
+hist(resid(repnested_og)) # normal 
+plot(fitted(repnested),resid(repnested_og)) # a little skewed but okay
 
 hist(resid(repnested)) # normal 
 plot(fitted(repnested),resid(repnested)) # a little skewed but okay
 
 hist(resid(cum_repnested)) # normal 
 plot(fitted(cum_repnested),resid(cum_repnested)) 
+
+AIC(repnested_og)
+AIC(repnested)
 ```
 # Create effects plots
 use ggpredict or ggeffect? 
@@ -165,6 +174,7 @@ output of ggpredict and ggeffect have the same structure I think so should be pr
 ```{r}
 # make predictions
 g <- ggpredict(repnested, terms=c("Days_in_TB [all]", "Temperature"))
+gog <- ggpredict(repnested_og, terms=c("Days_in_TB [all]", "Temperature"))
 gcum <- ggpredict(cum_repnested, terms=c("Days_in_TB [all]", "Temperature"))
 #color = sequential_hcl(5,palette = "Hawaii")[5:1]
 
@@ -180,15 +190,37 @@ plot_mod = ggplot(g, aes(x, predicted)) +
   ylab("Probability of Daily Survival") + labs(color =  expression("Temperature " ( degree~C))) + theme_classic() + theme(text = element_text(size = 20))
 
 # plot g with daily probabilities layered 
+OG = survival %>% group_by(Temperature, Days_in_TB) %>% summarise(Total_Previous = sum(Previous_Starting))
+
+aggregated = survival %>% group_by(Temperature, Days_in_TB) %>% summarise(Number_Total = sum(Number)) 
+c <- merge(OG, aggregated, by = c("Temperature", "Days_in_TB") )
+
 ggplot(g, aes(x, predicted)) +
   geom_ribbon(aes(ymin=conf.low, ymax=conf.high, fill=group, alpha=group)) + 
-  scale_alpha_manual(values = c("17.5" = 0.15, "25" = 0.15, "29.5"=0.15, "31" = 0.15, "32.5" = 0.02), guide="none") +  
+  scale_alpha_manual(values = c("17.5" = 0.2, "25" = 0.15, "29.5"=0.15, "31" = 0.08, "32.5" = 0.03), guide="none") +  
   geom_line(aes(color=group), linewidth = 2, linetype="dashed") +
   scale_color_manual(values=c(color))+
   scale_fill_manual( values=c(color), guide="none") +
   scale_x_continuous(breaks = seq(min(g$x), max(g$x), by = 1))+
   xlab(label = "Days")+
-  ylab("Probability of Daily Survival") + labs(color =  expression("Temperature " ( degree~C))) + theme_classic() + theme(text = element_text(size = 20)) + geom_point(data =x, aes(x = Days_in_TB, y = cumulative_probability, color = (Temperature)), position = position_jitter(width = 0.1), size = 2)
+  ylab("Probability of Daily Survival") + labs(color =  expression("Temperature " ( degree~C))) + theme_classic() + theme(text = element_text(size = 20)) + geom_point(data = c, aes(x = Days_in_TB, y = Number_Total/Total_Previous, color = (Temperature)), position = position_jitter(width = 0.1), size = 3)
+ggsave("~/Desktop/Opihi_Rearing/Output/opihi_exp3predicted+raw.png")
+
+ggplot(gog, aes(x, predicted)) +
+  geom_ribbon(aes(ymin=conf.low, ymax=conf.high, fill=group, alpha=group)) + 
+  scale_alpha_manual(values = c("17.5" = 0.15, "25" = 0.15, "29.5"=0.15, "31" = 0.15, "32.5" = 0.05), guide="none") +  
+  geom_line(aes(color=group), linewidth = 2, linetype="dashed") +
+  scale_color_manual(values=c(color))+
+  scale_fill_manual( values=c(color), guide="none") +
+  scale_x_continuous(breaks = seq(min(g$x), max(g$x), by = 1))+
+  xlab(label = "Days")+
+  ylab("Probability of Daily Survival") + labs(color =  expression("Temperature " ( degree~C))) + theme_classic() + theme(text = element_text(size = 20)) + geom_point(data = c, aes(x = Days_in_TB, y = Number_Total/Total_Previous, color = (Temperature)), position = position_jitter(width = 0.1), size = 3)
+
+
+# check repnested OG and new with AIC 
+# compare those plots with data (survival layered on top)
+# move left panel in manuscript to supplementals
+
 
 #plot gcum 
 ggplot(gcum, aes(x, predicted)) +
@@ -232,68 +264,9 @@ library(emmeans)
 emmeans(repnested, pairwise ~ Temperature|Days_in_TB, at = list(Days_in_TB= c(1,2)), adjust = "tukey") 
 # differences were tested for significance at day 1 and 3 by using library emmeans adjusted with tukey (tukey controls for doing multiple tests)
 # eg difference between temp 1 and 2 on day 1 sign or not
+emmeans(repnested_og, pairwise ~ Temperature|Days_in_TB, at = list(Days_in_TB= c(1,2)), adjust = "tukey") 
 
 emmeans(cum_repnested, pairwise ~ Temperature|Days_in_TB, at = list(Days_in_TB= c(1,2)), adjust = "tukey")
-```
-# KM survival analysis? 
-
-```{r}
-# covert data frame to reflect individuals as rows over time and alive/dead as 0/1's 
-binary_surival = purrr::pmap_dfr(as.data.frame(survival) %>% dplyr::select(c(Female, Temperature, Alkaline, Rep, Days_in_TB, Exp, Number, Previous_Starting)), 
-              function(Female, Temperature, Alkaline, Rep, Days_in_TB, Exp, Number, Previous_Starting) {
-                           data.frame(Female = Female,
-                                      Temperature = Temperature,
-                                      Alkaline = Alkaline,
-                                      Rep = Rep,
-                                      Days_in_TB = Days_in_TB,
-                                      Exp = Exp,
-                                      status = c( rep(0, Number),# alive
-                                                rep(1, Previous_Starting - Number) ) )
-                      }
-              )
-
-nrow(binary_surival) == sum(survival$Previous_Starting)
-library(survival)
-library(ggsurvfit)
-library(coxme)
-library(survminer)
-
-binary_surival$Temperature <- as.factor(binary_surival$Temperature)
-KM <- survfit2(Surv(time = Days_in_TB, event = status) ~  Temperature, data = binary_surival) 
-cox <- coxph(Surv(time = Days_in_TB, event = status) ~  Female + Temperature, data = binary_surival)
-#cox <- coxme(Surv(time = Days_in_TB, event = status) ~  (1|Female/Rep) + Temperature, data = binary_surival)
-
-
-ggsurvfit(KM) +
-  labs(
-    x = "Days",
-    y = "Overall survival probability"
-  )+ 
-  add_confidence_interval() +
-  geom_point(data =x, aes(x = Days_in_TB, y = cumulative_probability, color = (Temperature)), position = position_jitter(width = 0.1), size = 2)
-  
-plot(survfit(cox))
-
-temp_df <- with(binary_surival,
-               data.frame(Temperature = as.factor(c(32.5, 31, 29.5, 25, 17.5)), 
-                          Female = as.factor(rep(1,5))
-                          )
-               )
-fit <- survfit(cox, newdata = temp_df, data = binary_surival)
-ggsurvplot(fit)
-
-
-survdiff(Surv(time = Days_in_TB, event = status) ~ Temperature, data = binary_surival)
-pairwise_survdiff(Surv(time = Days_in_TB, event = status) ~ Temperature, data = binary_surival)
-summary(KM, times = c(1,2))
-summary(cox)
-
-
-emmeans(cox, pairwise ~ Temperature, at = list(Days_in_TB= c(1)), adjust="mvt") 
-emmeans(cox, pairwise ~ Temperature*Days_in_TB, at = list(Days_in_TB = c(1, 2)))
-
-d1 <- binary_surival %>% subset(Days_in_TB%in% c(1,2)) %>% dplyr::select(Temperature, Days_in_TB, status) %>% table() %>% melt()
-pairwise.prop.test(d1$value[1:10], (d1$value[1:10]+d1$value[11:20]), p.adjust.method = "bonferroni")
 
 ```
 # How long did larvae live for?
