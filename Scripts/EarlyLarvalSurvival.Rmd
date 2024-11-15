@@ -21,7 +21,8 @@ editor_options:
 -Note: Temp 31C, all vials had 0 survivors leading to quasi complete separation? (idk I googled it)
 ```{r}
 library(googlesheets4)
-survival <- read_sheet('https://docs.google.com/spreadsheets/d/10z96KBKw9umDFoErzKku8eiQMh4RgWS2MIzMLrLX6CY/edit#gid=361953853', "6hpf Survival Summary")
+#survival <- read_sheet('https://docs.google.com/spreadsheets/d/10z96KBKw9umDFoErzKku8eiQMh4RgWS2MIzMLrLX6CY/edit#gid=361953853', "6hpf Survival Summary")
+survival <- read.csv("~/Desktop/Opihi_Rearing/Input/Thermal Block Spreadsheet  - 6hpf Survival Summary.csv")
 library(ggeffects)
 library(ggplot2)
 library(dplyr)

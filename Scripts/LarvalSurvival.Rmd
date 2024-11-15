@@ -14,7 +14,10 @@ library(ggeffects)
 library(ggplot2)
 library(dplyr)
 
-survival <- read_sheet('https://docs.google.com/spreadsheets/d/10z96KBKw9umDFoErzKku8eiQMh4RgWS2MIzMLrLX6CY/edit#gid=361953853', "Survival Summary")
+#survival <- read_sheet('https://docs.google.com/spreadsheets/d/10z96KBKw9umDFoErzKku8eiQMh4RgWS2MIzMLrLX6CY/edit#gid=361953853', "Survival Summary")
+survival <- read.csv("~/Desktop/Opihi_Rearing/Input/Thermal Block Spreadsheet  - Survival Summary.csv")
+
+# preliminary plots 
 ggplot(survival) + 
   geom_point(aes(x = Days_in_TB, y = Proportion, color = as.factor(Treatment), shape = as.factor(Exp))) +scale_x_continuous(breaks = seq(1,12,1)) # each point is it's own female/rep
 
@@ -28,11 +31,9 @@ survival %>% group_by(Treatment, Days_in_TB) %>% reframe(live_total = sum(Number
 
 
 ```
-per temp, 5 females with at least each having 5 (for total of 25 larvae per temp)
-
 # Get Variables Ready
 ```{r}
-# quick check
+# quick check 
 library(stringi)
 length(unique(survival$Female)) == length(unique(paste(stri_sub(survival$Female_OriginalID, length = 1),survival$Exp)))
 
@@ -53,18 +54,19 @@ survival$Exp <- as.factor(survival$Exp)
 survival$Temperature <- as.factor(survival$Temperature)
 survival$Original_Starting <- as.integer(survival$Original_Starting)
 survival$Number <- as.integer(survival$Number)
-
+survival$Temperature <- as.factor(survival$Temperature)
 #survival = survival[
 #  with(survival, order(Treatment, Female, Alkaline, Rep, Days_in_TB)),
 #]
 
 #for (i in 2:nrow(survival)){ifelse(survival$Previous_Starting[i] != survival$Number[i-1], print(paste0("mismatch row",i)), print(("all good")))} # double check that previous value corresponds to number in previous row 
 ```
-Let's look at our numbers 
+# Let's look at our numbers and make some plots 
 
 ```{r}
 subset(survival, Days_in_TB == 1) %>% select(Temperature, Female, Original_Starting) %>%  group_by(Temperature) %>% summarise(number_per_treatment = sum(Original_Starting))
 
+# make a plot of daily survival over time 
 subset(survival, Days_in_TB == 1) %>% dplyr::select(Temperature, Female, Original_Starting, Exp) %>%  group_by(Exp, Temperature) %>% summarise(number_per_treatment = sum(Original_Starting))
 
 OG = survival %>% group_by(Temperature, Days_in_TB) %>% summarise(Total_Previous = sum(Previous_Starting))
@@ -90,7 +92,7 @@ x$Temperature <- as.factor(x$Temperature)
 ggplot(x) + 
    geom_point(aes(x = Days_in_TB, y = cumulative_probability, color = (Temperature)), position = position_jitter(width = 0.1), size = 3)  + scale_x_continuous("Days", breaks = seq(1, 17, by = 1)) + scale_y_continuous(breaks = seq(0,1,0.25)) + theme_classic() + ylab("Daily Proportion of Survivors") + scale_color_manual(values = color[1:5]) + labs(color =  expression("Temperature " ( degree~C))) 
 
-# # plot data as cumulative survival 
+# plot data as cumulative survival (# alive divided by original number)
 OG = survival %>% group_by(Temperature, Days_in_TB) %>% summarise(Total_Original = sum(Original_Starting)) %>% subset(Days_in_TB == 1)
 
 #aggregated = survival %>% group_by(Temperature, Days_in_TB) %>% summarise(Number_Total = sum(Number)) 
@@ -100,7 +102,7 @@ raw_cumulative = merge(OG, aggregated, by = c("Temperature") ) %>%
    geom_point(aes(x = Days_in_TB.y, y = Number_Total/Total_Original, color = (Temperature)),position = position_jitter(width = 0.1), size = 3)  + scale_x_continuous("Days", breaks = seq(1, 17, by = 1)) + scale_y_continuous(breaks = seq(0,1,0.25)) + theme_classic() + ylab("Cumulative Proportion of Survivors") + scale_color_manual(values = color[1:5]) + labs(color =  expression("Temperature " ( degree~C))) 
 
 
-#ggsave("~/Desktop/Opihi_Larvae/opihi_exp3raw.png")
+
 ```
 # Make our Model (glmer)
 
@@ -136,15 +138,16 @@ install.packages("glmmTMB")
 library(glmmTMB)
 
 #repnested = (glmmTMB( cbind(Number,Previous_Starting-Number) ~ (1 | Female/Rep) + Days_in_TB + Temperature+ I(Temperature^2), family = betabinomial, data = survival )) # dropped alk as random effect bc variance were very small and messing up code
-survival$Temperature = as.factor(survival$Temperature)
+
+class(survival$Temperature) # should be factor 
 repnested_og = (glmmTMB( cbind(Number,Previous_Starting-Number) ~ (1 | Female/Rep) + Days_in_TB*Temperature, family = betabinomial, data = survival ))
 summary(repnested_og)
 survival$time2 <- survival$Days_in_TB^2
 repnested = glmmTMB( cbind(Number,Previous_Starting-Number) ~ (1 | Female/Rep) + Days_in_TB*Temperature + I(Days_in_TB^2)*Temperature, family = betabinomial, data = survival)
 # alt make new variable with time*time 
-
-
 summary(repnested)
+
+# cumulative model instead 
 cum_repnested = (glmmTMB( cbind(Number,Original_Starting-Number) ~ (1 | Female/Rep) + Days_in_TB*Temperature, family = betabinomial, data = survival ))
 # use temp as factor since effect of temp is not cont. (big drop off at 32.5)
 AIC(repnested)
@@ -178,7 +181,7 @@ gog <- ggpredict(repnested_og, terms=c("Days_in_TB [all]", "Temperature"))
 gcum <- ggpredict(cum_repnested, terms=c("Days_in_TB [all]", "Temperature"))
 #color = sequential_hcl(5,palette = "Hawaii")[5:1]
 
-# plot g
+# plot g only 
 plot_mod = ggplot(g, aes(x, predicted)) +
   geom_ribbon(aes(ymin=conf.low, ymax=conf.high, fill=group, alpha=group)) + 
   scale_alpha_manual(values = c("17.5" = 0.15, "25" = 0.15, "29.5"=0.15, "31" = 0.15, "32.5" = 0.02), guide="none") +  
@@ -206,6 +209,7 @@ ggplot(g, aes(x, predicted)) +
   ylab("Probability of Daily Survival") + labs(color =  expression("Temperature " ( degree~C))) + theme_classic() + theme(text = element_text(size = 20)) + geom_point(data = c, aes(x = Days_in_TB, y = Number_Total/Total_Previous, color = (Temperature)), position = position_jitter(width = 0.1), size = 3)
 ggsave("~/Desktop/Opihi_Rearing/Output/opihi_exp3predicted+raw.png")
 
+# plot repnested_og with daily survival layered on top of 
 ggplot(gog, aes(x, predicted)) +
   geom_ribbon(aes(ymin=conf.low, ymax=conf.high, fill=group, alpha=group)) + 
   scale_alpha_manual(values = c("17.5" = 0.15, "25" = 0.15, "29.5"=0.15, "31" = 0.15, "32.5" = 0.05), guide="none") +  
@@ -215,11 +219,6 @@ ggplot(gog, aes(x, predicted)) +
   scale_x_continuous(breaks = seq(min(g$x), max(g$x), by = 1))+
   xlab(label = "Days")+
   ylab("Probability of Daily Survival") + labs(color =  expression("Temperature " ( degree~C))) + theme_classic() + theme(text = element_text(size = 20)) + geom_point(data = c, aes(x = Days_in_TB, y = Number_Total/Total_Previous, color = (Temperature)), position = position_jitter(width = 0.1), size = 3)
-
-
-# check repnested OG and new with AIC 
-# compare those plots with data (survival layered on top)
-# move left panel in manuscript to supplementals
 
 
 #plot gcum 
@@ -234,8 +233,8 @@ ggplot(gcum, aes(x, predicted)) +
 # plot gcum with raw data 
 OG = survival %>% group_by(Temperature, Days_in_TB) %>% summarise(Total_Original = sum(Original_Starting)) %>% subset(Days_in_TB == 1)
 aggregated = survival %>% group_by(Temperature, Days_in_TB) %>% summarise(Number_Total = sum(Number)) 
-
 cum_data <- merge(OG, aggregated, by = c("Temperature") ) 
+
 ggplot(gcum, aes(x, predicted)) +
   geom_line(aes(color=group), linewidth = 2, linetype="dashed") +
   geom_ribbon(aes(ymin=conf.low, ymax=conf.high, fill=group), alpha=0.15) + 
@@ -246,12 +245,12 @@ ggplot(gcum, aes(x, predicted)) +
   geom_point(data = cum_data, aes(x = Days_in_TB.y, y = Number_Total/Total_Original, color = (Temperature)),position = position_jitter(width = 0.1), size = 2)
 
 
-library(patchwork)
-raw_cumulative + raw_daily 
-ggsave("~/Desktop/Opihi_Larvae/opihi_exp3raw.png")
+#library(patchwork)
+#raw_cumulative + raw_daily 
+#ggsave("~/Desktop/Opihi_Larvae/opihi_exp3raw.png")
 
-plot_mod
-ggsave("~/Desktop/Opihi_Larvae/opihi_exp3predicted.png")
+#plot_mod
+#ggsave("~/Desktop/Opihi_Larvae/opihi_exp3predicted.png")
 
 
 ```
