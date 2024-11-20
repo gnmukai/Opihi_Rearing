@@ -179,6 +179,7 @@ output of ggpredict and ggeffect have the same structure I think so should be pr
 g <- ggpredict(repnested, terms=c("Days_in_TB [all]", "Temperature"))
 gog <- ggpredict(repnested_og, terms=c("Days_in_TB [all]", "Temperature"))
 gcum <- ggpredict(cum_repnested, terms=c("Days_in_TB [all]", "Temperature"))
+predict_response(cum_repnested, terms = c("Days_in_TB", "Temperature"))
 #color = sequential_hcl(5,palette = "Hawaii")[5:1]
 
 # plot g only 
@@ -242,8 +243,20 @@ ggplot(gcum, aes(x, predicted)) +
   scale_fill_manual( values=c(color), guide="none") +
   xlab(label = "Days")+
   ylab("Probability of Daily Survival") + labs(color =  expression("Temperature " ( degree~C))) + theme_classic() + theme(text = element_text(size = 20)) +
-  geom_point(data = cum_data, aes(x = Days_in_TB.y, y = Number_Total/Total_Original, color = (Temperature)),position = position_jitter(width = 0.1), size = 2)
+  geom_point(data = cum_data, aes(x = Days_in_TB.y, y = Number_Total/Total_Original, color = (Temperature))) + scale_x_continuous(breaks = seq(1, 17, by = 1))
+ggsave("~/Desktop/Opihi_Rearing/Output/opihi_exp3predicted+summedraw.png")
 
+# following code results in the same plot basically as the previous one but plotting individual vials 
+pred.dat <- predict_response(cum_repnested, terms = c("Days_in_TB","Temperature"))
+ggplot(gcum, aes(x, predicted)) +
+  geom_line(aes(color=group), linewidth = 2, linetype="dashed") +
+  geom_ribbon(aes(ymin=conf.low, ymax=conf.high, fill=group), alpha=0.15) + 
+  scale_color_manual(values=c(color))+
+  scale_fill_manual( values=c(color), guide="none") +
+  xlab(label = "Days")+
+  ylab("Probability of Daily Survival") + labs(color =  expression("Temperature " ( degree~C))) + theme_classic() + theme(text = element_text(size = 20)) +
+  geom_point(data = survival, aes(x = Days_in_TB, y = Proportion_Original, color = (Temperature)),position = position_jitter(width = 0.1), size = 2) + scale_x_continuous(breaks = seq(1, 17, by = 1))
+ggsave("~/Desktop/Opihi_Rearing/Output/opihi_exp3predicted+raw.png")
 
 #library(patchwork)
 #raw_cumulative + raw_daily 
